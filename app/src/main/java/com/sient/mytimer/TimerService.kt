@@ -28,7 +28,13 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
+enum class TimerMode { SIMPLE, POMODORO }
+
 data class TimerSnapshot(
+    val mode: TimerMode,
+    val phaseLabel: String,
+    val session: Int,
+    val onBreak: Boolean,
     val minutes: Int,
     val totalMillis: Long,
     val endElapsedRealtime: Long,
@@ -36,9 +42,12 @@ data class TimerSnapshot(
 )
 
 /**
- * Foreground service that owns the countdown, so the timer keeps running
- * when the user returns to the watch face or opens another app.
- * The UI observes [state] and sends commands via [start] / [stop].
+ * Foreground service that owns the countdown, so timers keep running when
+ * the user returns to the watch face or opens another app.
+ *
+ * SIMPLE mode counts one duration down and alerts until dismissed.
+ * POMODORO mode loops focus/break phases (long break after 4 sessions),
+ * alerting briefly at each transition, until the user stops it.
  */
 class TimerService : Service() {
 
@@ -58,42 +67,91 @@ class TimerService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            ACTION_START -> startTimer(intent.getIntExtra(EXTRA_MINUTES, 5))
+            ACTION_START -> startSimple(intent.getIntExtra(EXTRA_MINUTES, 5))
+            ACTION_START_POMODORO -> startPomodoro(intent.getIntExtra(EXTRA_MINUTES, 25))
             ACTION_STOP -> stopTimer()
         }
         return START_NOT_STICKY
     }
 
-    private fun startTimer(minutes: Int) {
+    private fun startSimple(minutes: Int) {
         countdownJob?.cancel()
         vibrator?.cancel()
 
         val totalMillis = minutes * 60_000L
         val end = SystemClock.elapsedRealtime() + totalMillis
-        _state.value = TimerSnapshot(minutes, totalMillis, end, finished = false)
+        _state.value = TimerSnapshot(
+            TimerMode.SIMPLE, "Timer", 0, false, minutes, totalMillis, end, finished = false
+        )
 
         createChannel()
-        val builder = countdownNotification(minutes, totalMillis)
-        OngoingActivity.Builder(applicationContext, NOTIFICATION_ID, builder)
-            .setStaticIcon(R.drawable.ic_timer_notification)
-            .setTouchIntent(tapIntent())
-            .setStatus(
-                Status.Builder()
-                    .addTemplate("#left# left")
-                    .addPart("left", Status.TimerPart(end))
-                    .build()
-            )
-            .build()
-            .apply(applicationContext)
-        startForeground(NOTIFICATION_ID, builder.build())
+        goForeground(
+            countdownNotification("Timer running", "$minutes minute timer", totalMillis),
+            "#left# left", end
+        )
 
         countdownJob = scope.launch {
             delay(totalMillis)
-            onTimerFinished()
+            onSimpleFinished()
         }
     }
 
-    private fun onTimerFinished() {
+    private fun startPomodoro(workMinutes: Int) {
+        countdownJob?.cancel()
+        vibrator?.cancel()
+        createChannel()
+
+        countdownJob = scope.launch {
+            var session = 1
+            var isFirstPhase = true
+            while (true) {
+                runPhase("Focus", workMinutes, session, onBreak = false, isFirstPhase)
+                isFirstPhase = false
+                transitionAlert()
+
+                val longBreak = session == SESSIONS_PER_CYCLE
+                runPhase(
+                    if (longBreak) "Long break" else "Break",
+                    if (longBreak) LONG_BREAK_MINUTES else BREAK_MINUTES,
+                    session, onBreak = true, isFirstPhase = false
+                )
+                transitionAlert()
+
+                session = if (session == SESSIONS_PER_CYCLE) 1 else session + 1
+            }
+        }
+    }
+
+    private suspend fun runPhase(
+        label: String,
+        minutes: Int,
+        session: Int,
+        onBreak: Boolean,
+        isFirstPhase: Boolean,
+    ) {
+        val total = minutes * 60_000L
+        val end = SystemClock.elapsedRealtime() + total
+        _state.value = TimerSnapshot(
+            TimerMode.POMODORO, label, session, onBreak, minutes, total, end, finished = false
+        )
+        val builder = countdownNotification(
+            label, "Pomodoro · session $session of $SESSIONS_PER_CYCLE", total
+        )
+        if (isFirstPhase) {
+            goForeground(builder, "$label · #left#", end)
+        } else {
+            updateOngoing(builder, "$label · #left#", end)
+        }
+        delay(total)
+    }
+
+    /** Brief beep + vibration between pomodoro phases; no dismissal needed. */
+    private fun transitionAlert() {
+        playDoubleBeep()
+        vibrator?.vibrate(VibrationEffect.createWaveform(longArrayOf(0, 400, 200, 400), -1))
+    }
+
+    private fun onSimpleFinished() {
         _state.value = _state.value?.copy(finished = true)
         playDoubleBeep()
         vibrator?.vibrate(
@@ -137,6 +195,42 @@ class TimerService : Service() {
         super.onDestroy()
     }
 
+    private fun goForeground(
+        builder: NotificationCompat.Builder,
+        statusTemplate: String,
+        endElapsedRealtime: Long,
+    ) {
+        OngoingActivity.Builder(applicationContext, NOTIFICATION_ID, builder)
+            .setStaticIcon(R.drawable.ic_timer_notification)
+            .setTouchIntent(tapIntent())
+            .setStatus(
+                Status.Builder()
+                    .addTemplate(statusTemplate)
+                    .addPart("left", Status.TimerPart(endElapsedRealtime))
+                    .build()
+            )
+            .build()
+            .apply(applicationContext)
+        startForeground(NOTIFICATION_ID, builder.build())
+    }
+
+    private fun updateOngoing(
+        builder: NotificationCompat.Builder,
+        statusTemplate: String,
+        endElapsedRealtime: Long,
+    ) {
+        OngoingActivity.recoverOngoingActivity(applicationContext)
+            ?.update(
+                applicationContext,
+                Status.Builder()
+                    .addTemplate(statusTemplate)
+                    .addPart("left", Status.TimerPart(endElapsedRealtime))
+                    .build()
+            )
+        getSystemService(NotificationManager::class.java)
+            .notify(NOTIFICATION_ID, builder.build())
+    }
+
     private fun tapIntent(): PendingIntent =
         PendingIntent.getActivity(
             this,
@@ -145,11 +239,15 @@ class TimerService : Service() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
-    private fun countdownNotification(minutes: Int, millisLeft: Long): NotificationCompat.Builder =
+    private fun countdownNotification(
+        title: String,
+        text: String,
+        millisLeft: Long,
+    ): NotificationCompat.Builder =
         NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_timer_notification)
-            .setContentTitle("Timer running")
-            .setContentText("$minutes minute timer")
+            .setContentTitle(title)
+            .setContentText(text)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setShowWhen(true)
@@ -182,9 +280,15 @@ class TimerService : Service() {
     }
 
     companion object {
+        const val FOCUS_MINUTES = 25
+        const val BREAK_MINUTES = 5
+        const val LONG_BREAK_MINUTES = 15
+        const val SESSIONS_PER_CYCLE = 4
+
         private const val CHANNEL_ID = "timer"
         private const val NOTIFICATION_ID = 1
         private const val ACTION_START = "com.sient.mytimer.action.START"
+        private const val ACTION_START_POMODORO = "com.sient.mytimer.action.START_POMODORO"
         private const val ACTION_STOP = "com.sient.mytimer.action.STOP"
         private const val EXTRA_MINUTES = "minutes"
 
@@ -196,6 +300,14 @@ class TimerService : Service() {
                 Intent(context, TimerService::class.java)
                     .setAction(ACTION_START)
                     .putExtra(EXTRA_MINUTES, minutes)
+            )
+        }
+
+        fun startPomodoro(context: Context, workMinutes: Int) {
+            context.startForegroundService(
+                Intent(context, TimerService::class.java)
+                    .setAction(ACTION_START_POMODORO)
+                    .putExtra(EXTRA_MINUTES, workMinutes)
             )
         }
 
