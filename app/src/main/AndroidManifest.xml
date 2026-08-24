@@ -9,6 +9,11 @@
 
     <uses-feature android:name="android.hardware.type.watch" />
 
+    <!-- Package visibility: needed so the tile can launch MyRun. -->
+    <queries>
+        <package android:name="com.sient.myrun" />
+    </queries>
+
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
@@ -29,6 +34,24 @@
         <meta-data
             android:name="com.google.android.wearable.standalone"
             android:value="true" />
+
+        <service
+            android:name=".MyAppsTileService"
+            android:exported="true"
+            android:label="My Apps"
+            android:permission="com.google.android.wearable.permission.BIND_TILE_PROVIDER">
+            <intent-filter>
+                <action android:name="androidx.wear.tiles.action.BIND_TILE_PROVIDER" />
+            </intent-filter>
+            <meta-data
+                android:name="androidx.wear.tiles.PREVIEW"
+                android:resource="@drawable/tile_preview" />
+        </service>
+
+        <activity
+            android:name=".LaunchRunActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.NoDisplay" />
 
         <service
             android:name=".TimerService"

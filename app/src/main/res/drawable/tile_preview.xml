@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="192dp"
+    android:height="192dp"
+    android:viewportWidth="192"
+    android:viewportHeight="192">
+    <!-- Round tile background -->
+    <path
+        android:pathData="M96,4 a92,92 0 1,1 0,184 a92,92 0 1,1 0,-184"
+        android:fillColor="#0B1530" />
+    <!-- Chip 1 -->
+    <path
+        android:pathData="M48,62 h96 a20,20 0 0,1 0,40 h-96 a20,20 0 0,1 0,-40 z"
+        android:fillColor="#22D3EE" />
+    <!-- Chip 1 icon dot -->
+    <path
+        android:pathData="M62,82 m-9,0 a9,9 0 1,0 18,0 a9,9 0 1,0 -18,0"
+        android:fillColor="#0B1530" />
+    <!-- Chip 2 -->
+    <path
+        android:pathData="M48,112 h96 a20,20 0 0,1 0,40 h-96 a20,20 0 0,1 0,-40 z"
+        android:fillColor="#3D5A99" />
+    <!-- Chip 2 icon dot -->
+    <path
+        android:pathData="M62,132 m-9,0 a9,9 0 1,0 18,0 a9,9 0 1,0 -18,0"
+        android:fillColor="#E8EDF7" />
+</vector>
