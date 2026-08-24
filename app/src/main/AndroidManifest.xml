@@ -6,6 +6,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Exact alarms drive phase ends; this variant is meant for timer apps and needs no prompt. -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
 
     <uses-feature android:name="android.hardware.type.watch" />
 
