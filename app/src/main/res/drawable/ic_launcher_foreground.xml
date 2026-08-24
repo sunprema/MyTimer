@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Dial ring -->
+    <path
+        android:pathData="M54,24 a30,30 0 1,1 0,60 a30,30 0 1,1 0,-60"
+        android:strokeColor="#3D5A99"
+        android:strokeWidth="3"
+        android:fillColor="#00000000" />
+    <!-- 12 tick marks -->
+    <path
+        android:pathData="M54,32 L54,28 M65,34.95 L67,31.48 M73.05,43 L76.52,41 M76,54 L80,54 M73.05,65 L76.52,67 M65,73.05 L67,76.52 M54,76 L54,80 M43,73.05 L41,76.52 M34.95,65 L31.48,67 M32,54 L28,54 M34.95,43 L31.48,41 M43,34.95 L41,31.48"
+        android:strokeColor="#E8EDF7"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round" />
+    <!-- Selection arc: 12 o'clock to 5 o'clock -->
+    <path
+        android:pathData="M54,24 A30,30 0 0 1 69,79.98"
+        android:strokeColor="#22D3EE"
+        android:strokeWidth="5"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000" />
+    <!-- Knob at the end of the arc -->
+    <path
+        android:pathData="M64.5,79.98 a4.5,4.5 0 1,0 9,0 a4.5,4.5 0 1,0 -9,0"
+        android:fillColor="#FFFFFF" />
+    <!-- Center dot -->
+    <path
+        android:pathData="M50.5,54 a3.5,3.5 0 1,0 7,0 a3.5,3.5 0 1,0 -7,0"
+        android:fillColor="#22D3EE" />
+</vector>
